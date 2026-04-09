@@ -11,7 +11,6 @@ from rest_framework import status
 
 from cinema.models import Movie, MovieSession, CinemaHall, Genre, Actor
 from cinema.serializers import (
-    MovieSerializer,
     MovieListSerializer,
     MovieDetailSerializer,
 )
@@ -178,8 +177,9 @@ class UnauthenticatedMovieApiTests(TestCase):
 class AuthenticatedMovieApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = get_user_model().objects.create_superuser(
-            email="test@test.test", password="testpassword"
+        self.user = get_user_model().objects.create_user(
+            email="test@test.test",
+            password="testpassword"
         )
         self.client.force_authenticate(user=self.user)
 
@@ -253,6 +253,24 @@ class AuthenticatedMovieApiTests(TestCase):
         self.assertIn(serializer_with_actor_2.data, res.data)
         self.assertNotIn(serializer_without_actors.data, res.data)
 
+    def test_filter_movies_by_title(self):
+        movie_1 = sample_movie(title="Home Alone")
+        movie_2 = sample_movie(title="Home and Away")
+        movie_3 = sample_movie(title="Interstellar")
+
+        res = self.client.get(
+            MOVIE_URL,
+            {"title": "hom"},
+        )
+
+        serializer_1 = MovieListSerializer(movie_1)
+        serializer_2 = MovieListSerializer(movie_2)
+        serializer_3 = MovieListSerializer(movie_3)
+
+        self.assertIn(serializer_1.data, res.data)
+        self.assertIn(serializer_2.data, res.data)
+        self.assertNotIn(serializer_3.data, res.data)
+
     def test_retrieve_movie_detail(self):
         movie = sample_movie()
         movie.genres.add(sample_genre())
@@ -268,14 +286,18 @@ class AuthenticatedMovieApiTests(TestCase):
         self.assertEqual(res.data, serializer.data)
 
     def test_create_movie_forbidden(self):
+        genre = sample_genre()
+        actor = sample_actor()
         payload = {
             "title": "Test Movie ",
             "description": "Create forbidden",
             "duration": 60,
+            "genres": [genre.id],
+            "actors": [actor.id],
         }
 
         res = self.client.post(MOVIE_URL, payload)
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class AdminMovieApiTests(TestCase):
